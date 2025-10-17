@@ -1,0 +1,134 @@
+[project]
+name = "ethylene-glycol-phantom-thermometry"
+version = "0.1.0"
+description = "A Python package for multi-echo MR thermometry using ethylene glycol probes in phantoms"
+authors = [
+    { name = "Aaron Oliver-Taylor" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26.0",
+    "scipy>=1.14.0",
+    "matplotlib>=3.9.0",
+    "pydantic>=2.9.0",
+    "typer>=0.15.0",
+    "rich>=13.9.0",
+    "pandas>=2.3.3"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "mypy>=1.13.0",
+    "ruff>=0.8.0",
+    "types-setuptools>=76.0.0"
+]
+
+[project.scripts]
+pyruvate-kinetics = "ethylene_glycol_phantom_thermometry.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "N",    # pep8-naming
+    "SIM",  # flake8-simplify
+    "TID",  # flake8-tidy-imports
+    "RUF",  # Ruff-specific rules
+]
+ignore = [
+    "N802",  # Function name should be lowercase (for pH functions)
+    "N803",  # Argument name should be lowercase (for pH args)
+    "N806",  # Variable in function should be lowercase (for pH vars)
+    "N815",  # Variable in class scope should not be mixedCase (for pH)
+    "B008",  # Do not perform function call in argument defaults (for typer)
+    "F841",  # Local variable is assigned to but never used
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ethylene_glycol_phantom_thermometry"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_unimported = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+check_untyped_defs = true
+strict_equality = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[[tool.mypy.overrides]]
+module = "matplotlib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "scipy.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=ethylene_glycol_phantom_thermometry",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+source = ["ethylene_glycol_phantom_thermometry"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.20",
+    "mkdocstrings>=0.30.1",
+    "mkdocstrings-python>=1.18.2",
+    "pymdown-extensions>=10.16.1",
+    "griffe-pydantic>=1.0.0",
+]
