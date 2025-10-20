@@ -13,7 +13,8 @@ dependencies = [
     "pydantic>=2.9.0",
     "typer>=0.15.0",
     "rich>=13.9.0",
-    "pandas>=2.3.3"
+    "pandas>=2.3.3",
+    "mrimagetools@git+https://github.com/gold-standard-phantoms/mr-image-tools#egg=MIT-152-multiecho-thermometry-filter"
 ]
 
 [project.optional-dependencies]
