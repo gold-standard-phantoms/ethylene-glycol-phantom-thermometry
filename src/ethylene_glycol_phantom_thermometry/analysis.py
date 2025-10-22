@@ -1,16 +1,19 @@
-from pathlib import Path
-import typer
-from rich.console import Console
 import logging
-import pandas as pd
+import math
+import pdb
 from datetime import datetime, timedelta
 from enum import Enum
-from matplotlib import pyplot as plt
-import pdb
+from pathlib import Path
 
+import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
 from mrimagetools.pipelines.thermometry.multiecho_thermometry import (
     multiecho_thermometry,
 )
+from rich.console import Console
 
 from ethylene_glycol_phantom_thermometry.util import (
     get_project_root,
@@ -24,7 +27,6 @@ DATA_DIR = PROJECT_ROOT / "data"
 console = Console()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-app = typer.Typer(pretty_exceptions_enable=False)
 
 
 class Method(str, Enum):
@@ -64,6 +66,8 @@ def analysis(
 
     unique_runs = set(sd.run for sd in series_data_list)
     analysis_results = []
+    fibre_optic_sample_times = []
+    fibre_optic_samples = []
     for run in unique_runs:
         console.print(
             f"[bold blue]Processing run {run} of {len(unique_runs)}[/bold blue]"
@@ -104,17 +108,21 @@ def analysis(
         sort_indices = sorted(range(len(acq_dt_list)), key=lambda k: acq_dt_list[k])
         acq_dt_list_sorted = [acq_dt_list[i] for i in sort_indices]
         duration_list_sorted = [duration_list[i] for i in sort_indices]
+        run_start_time = acq_dt_list_sorted[0]
+        run_end_time = acq_dt_list_sorted[-1] + timedelta(
+            seconds=duration_list_sorted[-1]
+        )
 
         # acquisition took place from first datetime to last + acquisition duration. We want to use the midpoint time
-        midpoint_time = (
-            acq_dt_list_sorted[0]
-            + (
-                acq_dt_list_sorted[-1]
-                + timedelta(seconds=duration_list_sorted[-1])
-                - acq_dt_list_sorted[0]
-            )
-            / 2
-        )
+        midpoint_time = acq_dt_list_sorted[0] + (run_end_time - run_start_time) / 2
+
+        # append the fibre optic temperature measurements - start of run and end of run.
+
+        fibre_optic_sample_times.append(run_start_time)
+        fibre_optic_samples.append(run_series[sort_indices[0]].fo_temperature_start)
+
+        fibre_optic_sample_times.append(run_end_time)
+        fibre_optic_samples.append(run_series[sort_indices[-1]].fo_temperature_end)
 
         for region in report_data.report:
             analysis_results.append(
@@ -130,12 +138,56 @@ def analysis(
     console.print(
         f"[bold blue]Thermometry processing using method {method} complete[/bold blue]"
     )
+
     results_df = pd.DataFrame(analysis_results)
+    session_start_time = min(results_df["time"].iloc[0], fibre_optic_sample_times[0])
+    session_end_time = max(results_df["time"].iloc[-1], fibre_optic_sample_times[-1])
+    # results_df["elapsed_time"] = results_df["time"] - session_start_time
+    # pdb.set_trace()
+
     results_file = data_dir / f"thermometry_analysis_{method}.xlsx"
     results_df.to_excel(results_file, index=False)
     console.print(
         f"[bold green]Analysis complete! Results saved to {results_file}[/bold green]"
     )
+
+    def timedelta_formatter(x: float, pos: int) -> str:
+        """
+        Formats a tick value (matplotlib date number) as the time elapsed
+        since the start_time.
+        """
+
+        # Convert matplotlib's float date to a datetime object
+        current_time: datetime = mdates.num2date(x)
+
+        # Calculate the time difference (timedelta)
+        time_elapsed: timedelta = current_time.replace(tzinfo=None) - session_start_time
+
+        # Calculate total seconds and break it down
+        total_seconds = int(time_elapsed.total_seconds())
+
+        # Ensure we don't display negative time
+        if total_seconds < 0:
+            return ""
+
+        days, remainder = divmod(total_seconds, 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        # Build the string dynamically
+        parts = []
+        if days > 0:
+            parts.append(f"{days}d")
+        if hours > 0:
+            parts.append(f"{hours}h")
+        if minutes > 0:
+            parts.append(f"{minutes}m")
+        # Always show seconds if it's the only unit (e.g., "30s")
+        if seconds > 0 or not parts:
+            parts.append(f"{seconds}s")
+
+        return " ".join(parts)
+
     # make a plot of temperature vs time for each region
     plt.figure(figsize=(10, 6))
     for region_id in results_df["region_id"].unique():
@@ -147,7 +199,31 @@ def analysis(
             label=f"Region {region_id}",
             marker="o",
             linestyle="-",
+            capsize=5,
         )
+    plt.plot(
+        np.asarray(fibre_optic_sample_times),
+        np.asarray(fibre_optic_samples),
+        marker="o",
+        linestyle="-",
+        label="Fibre Optic Temperature",
+    )
+
+    formatter = mticker.FuncFormatter(timedelta_formatter)
+
+    interval_minutes = 30
+    session_duration: timedelta = session_end_time - session_start_time
+
+    tick_locations = [
+        session_start_time + timedelta(minutes=i * interval_minutes)
+        for i in range(
+            0, math.ceil(session_duration.total_seconds() / 60), interval_minutes
+        )
+    ]
+
+    # plt.gca().xaxis.set_ticks(tick_locations)
+    plt.gca().xaxis.set_major_formatter(formatter)
+    # plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=30))
 
     plt.xlabel("Time")
     plt.ylabel("Temperature (°C)")

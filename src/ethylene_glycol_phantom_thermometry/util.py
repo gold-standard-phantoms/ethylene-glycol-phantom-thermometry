@@ -4,9 +4,9 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from pydantic import BaseModel, ConfigDict
 
 import pandas as pd
+from pydantic import BaseModel, ConfigDict
 
 
 def get_project_root() -> Path:
@@ -37,6 +37,8 @@ class SeriesData(BaseModel):
     nifti_file: Path | None = None
     duration: float | None = None
     segmentation: str = ""
+    fo_temperature_start: float | None = None
+    fo_temperature_end: float | None = None
 
 
 @dataclass
@@ -91,6 +93,9 @@ def load_series_info(filename: Path) -> list[SeriesData]:
     - run: The run number
     - te_ms: The TE values in ms, stored as a string representation of a list (e.g., '[1.2, 3.4]')
     - duration: The duration of the image series acquisition
+    - valid_segmentation: name of the segmentation that is valid for this image series
+    - fo_temperature_start: The fibre optic temperature measurement at the start of the acquisition
+    - fo_temperature_end: The fibre optic temperature measurement at the end of the acquisition
 
     Args:
         filename: The path to the Excel file.
@@ -107,9 +112,7 @@ def load_series_info(filename: Path) -> list[SeriesData]:
         # Iterate over each row in the DataFrame
         for index, row in df.iterrows():
             # Safely parse the string '[1.2, 3.4]' into a list of floats
-            te_ms_list = (
-                ast.literal_eval(row["te_ms"]) if isinstance(row["te_ms"], str) else []
-            )
+            te_ms_list = ast.literal_eval(row["te_ms"]) if isinstance(row["te_ms"], str) else []
 
             # Create a dataclass instance and append it to our list
             record = SeriesData(
@@ -121,6 +124,8 @@ def load_series_info(filename: Path) -> list[SeriesData]:
                 duration=row["acquisition_duration"],
                 nifti_file=None,
                 segmentation=row["valid_segmentation"],
+                fo_temperature_start=row["fo_temperature_start"],
+                fo_temperature_end=row["fo_temperature_end"],
             )
             series_records.append(record)
 
@@ -134,9 +139,7 @@ def load_series_info(filename: Path) -> list[SeriesData]:
         sys.exit(1)
 
 
-def export_unique_te_arrays(
-    data: list[SeriesData], output_dir: Path, te_units: str = "ms"
-) -> None:
+def export_unique_te_arrays(data: list[SeriesData], output_dir: Path, te_units: str = "ms") -> None:
     """
     Finds unique te_ms arrays and exports each to a separate text file.
     """
@@ -149,13 +152,9 @@ def export_unique_te_arrays(
     # Use a set of tuples to find unique lists (lists aren't hashable, tuples are)
     unique_arrays = set(tuple(item.te_ms) for item in data)
     # divide by divisor
-    unique_arrays = set(
-        tuple(value / divisor for value in te_tuple) for te_tuple in unique_arrays
-    )
+    unique_arrays = set(tuple(value / divisor for value in te_tuple) for te_tuple in unique_arrays)
 
-    print(
-        f"\nFound {len(unique_arrays)} unique te_ms arrays. Exporting to '{output_dir}/'..."
-    )
+    print(f"\nFound {len(unique_arrays)} unique te_ms arrays. Exporting to '{output_dir}/'...")
 
     # Loop through the unique arrays and save each to a file
     for i, te_tuple in enumerate(unique_arrays, 1):

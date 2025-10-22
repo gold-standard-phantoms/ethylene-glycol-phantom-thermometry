@@ -1145,7 +1145,7 @@ wheels = [
 [[package]]
 name = "mrimagetools"
 version = "3.0.0+unknown.unknown"
-source = { git = "https://github.com/gold-standard-phantoms/mr-image-tools?rev=MIT-152-multiecho-thermometry-filter#eb0b264ea28807ede841db2dc1ecc09f728a9053" }
+source = { git = "https://github.com/gold-standard-phantoms/mr-image-tools?rev=MIT-152-multiecho-thermometry-filter#68b11141e1773c5a6c925b816d50dbbf227fc3b9" }
 dependencies = [
     { name = "dicom-core", extra = ["nifti"] },
     { name = "gitpython" },
