@@ -1,9 +1,10 @@
-import typer
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 from typing import Annotated
 
-from ethylene_glycol_phantom_thermometry.analysis import analysis, Method
+import typer
+
+from ethylene_glycol_phantom_thermometry.analysis import Method, analysis
 from ethylene_glycol_phantom_thermometry.util import get_project_root
 
 app = typer.Typer()
