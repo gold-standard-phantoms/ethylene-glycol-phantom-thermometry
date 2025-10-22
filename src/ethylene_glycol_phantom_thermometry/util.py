@@ -4,6 +4,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from pydantic import BaseModel, ConfigDict
 
 import pandas as pd
 
@@ -24,16 +25,18 @@ def get_project_root() -> Path:
     return current_path
 
 
-@dataclass
-class SeriesData:
+class SeriesData(BaseModel):
     """A dataclass to hold study data."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     patient_name: str
     study_id: str
     series_no: int
     run: int
-    te_ms: list[float] = field(default_factory=list)
-    nifti_file: Path | None = field(default=None)
+    te_ms: list[float]
+    nifti_file: Path | None = None
+    duration: float | None = None
+    segmentation: str = ""
 
 
 @dataclass
@@ -87,6 +90,7 @@ def load_series_info(filename: Path) -> list[SeriesData]:
     - series_no: The series number
     - run: The run number
     - te_ms: The TE values in ms, stored as a string representation of a list (e.g., '[1.2, 3.4]')
+    - duration: The duration of the image series acquisition
 
     Args:
         filename: The path to the Excel file.
@@ -98,12 +102,14 @@ def load_series_info(filename: Path) -> list[SeriesData]:
         # Read the Excel file into a pandas DataFrame
         df = pd.read_excel(filename)
 
-        patient_records = []
+        series_records = []
 
         # Iterate over each row in the DataFrame
         for index, row in df.iterrows():
             # Safely parse the string '[1.2, 3.4]' into a list of floats
-            te_ms_list = ast.literal_eval(row["te_ms"]) if isinstance(row["te_ms"], str) else []
+            te_ms_list = (
+                ast.literal_eval(row["te_ms"]) if isinstance(row["te_ms"], str) else []
+            )
 
             # Create a dataclass instance and append it to our list
             record = SeriesData(
@@ -112,10 +118,13 @@ def load_series_info(filename: Path) -> list[SeriesData]:
                 series_no=int(row["series_no"]),
                 run=int(row["run"]),
                 te_ms=te_ms_list,
+                duration=row["acquisition_duration"],
+                nifti_file=None,
+                segmentation=row["valid_segmentation"],
             )
-            patient_records.append(record)
+            series_records.append(record)
 
-        return patient_records
+        return series_records
 
     except FileNotFoundError:
         print(f"Error: The file '{filename}' was not found.")
@@ -125,7 +134,9 @@ def load_series_info(filename: Path) -> list[SeriesData]:
         sys.exit(1)
 
 
-def export_unique_te_arrays(data: list[SeriesData], output_dir: Path, te_units: str = "ms"):
+def export_unique_te_arrays(
+    data: list[SeriesData], output_dir: Path, te_units: str = "ms"
+) -> None:
     """
     Finds unique te_ms arrays and exports each to a separate text file.
     """
@@ -138,9 +149,13 @@ def export_unique_te_arrays(data: list[SeriesData], output_dir: Path, te_units: 
     # Use a set of tuples to find unique lists (lists aren't hashable, tuples are)
     unique_arrays = set(tuple(item.te_ms) for item in data)
     # divide by divisor
-    unique_arrays = set(tuple(value / divisor for value in te_tuple) for te_tuple in unique_arrays)
+    unique_arrays = set(
+        tuple(value / divisor for value in te_tuple) for te_tuple in unique_arrays
+    )
 
-    print(f"\nFound {len(unique_arrays)} unique te_ms arrays. Exporting to '{output_dir}/'...")
+    print(
+        f"\nFound {len(unique_arrays)} unique te_ms arrays. Exporting to '{output_dir}/'..."
+    )
 
     # Loop through the unique arrays and save each to a file
     for i, te_tuple in enumerate(unique_arrays, 1):
