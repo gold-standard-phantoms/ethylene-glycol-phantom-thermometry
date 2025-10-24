@@ -61,13 +61,14 @@ def analysis(
             series_data.nifti_file = nifti_filename
         else:
             print(
-                f"Warning: No matching sidecar found for study {series_data.study_id}, series {series_data.series_no}"
+                f"Warning: No matching sidecar found for study {series_data.study_id},"
+                f" series {series_data.series_no}"
             )
 
-    unique_runs = set(sd.run for sd in series_data_list)
+    unique_runs = {sd.run for sd in series_data_list}
     analysis_results = []
-    fibre_optic_sample_times = []
-    fibre_optic_samples = []
+    fibre_optic_sample_times: list[datetime] = []
+    fibre_optic_samples: list[float] = []
     for run in unique_runs:
         console.print(
             f"[bold blue]Processing run {run} of {len(unique_runs)}[/bold blue]"
@@ -75,13 +76,13 @@ def analysis(
         # collect the series data for this run
         run_series = [sd for sd in series_data_list if sd.run == run]
         # save echo times in seconds to text files
-        te_files = []
+        te_files: list[Path] = []
         multiecho_files: list[Path] = []
         for sd in run_series:
             te_s = [te / 1000.0 for te in sd.te_ms]
             te_file = data_dir / f"run-{run:02d}_series-{sd.series_no:03d}_te_s.txt"
             te_files.append(te_file)
-            with open(te_file, "w") as f:
+            with open(te_file, "w", encoding="utf-8") as f:
                 for te in te_s:
                     f.write(f"{te}\n")
             multiecho_files.append(sd.nifti_file)  # type: ignore
@@ -113,7 +114,8 @@ def analysis(
             seconds=duration_list_sorted[-1]
         )
 
-        # acquisition took place from first datetime to last + acquisition duration. We want to use the midpoint time
+        # acquisition took place from first datetime to last + acquisition duration.
+        # We want to use the midpoint time
         midpoint_time = acq_dt_list_sorted[0] + (run_end_time - run_start_time) / 2
 
         # append the fibre optic temperature measurements - start of run and end of run.
@@ -124,6 +126,7 @@ def analysis(
         fibre_optic_sample_times.append(run_end_time)
         fibre_optic_samples.append(run_series[sort_indices[-1]].fo_temperature_end)
 
+        plt.figure(figsize=(10, 6))
         for region in report_data.report:
             analysis_results.append(
                 {
@@ -135,6 +138,20 @@ def analysis(
                     "interval": region.region_temperature_uncertainty[1],
                 }
             )
+            # plot histograms of the temperature values
+            plt.hist(
+                region.region_temperature_values[region.r_squared > 0.9],
+                bins=20,
+                alpha=0.5,
+                label=f"NMR Tube {region.region_id}",
+            )
+
+        plt.xlabel("Temperature (°C)")
+        plt.ylabel("Count")
+        plt.title(f"Thermometry Analysis Run {run}")
+        plt.legend()
+        plt.savefig(data_dir / f"run-{run:02d}_temperature_distribution.png")
+
     console.print(
         f"[bold blue]Thermometry processing using method {method} complete[/bold blue]"
     )
@@ -196,7 +213,7 @@ def analysis(
             x=region_df["time"],
             y=region_df["temperature"],
             yerr=region_df["uncertainty"],
-            label=f"Region {region_id}",
+            label=f"NMR Tube {region_id}",
             marker="o",
             linestyle="-",
             capsize=5,
@@ -231,7 +248,7 @@ def analysis(
     plt.legend()
     plt.grid(True)
     # plt.show()
-    console.print(f"[bold blue]Saving plot to files[/bold blue]")
+    console.print("[bold blue]Saving plot to files[/bold blue]")
     # save the plot as png and svg
     plot_file_png = data_dir / f"thermometry_analysis_{method}.png"
     plot_file_svg = data_dir / f"thermometry_analysis_{method}.svg"

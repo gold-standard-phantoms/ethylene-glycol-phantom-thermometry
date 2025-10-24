@@ -1,3 +1,5 @@
+"""Command line interface for ethylene-glycol-phantom-thermometry."""
+
 from enum import Enum
 from pathlib import Path
 from typing import Annotated
@@ -45,7 +47,7 @@ def main(
     """
     Run the ethylene glycol phantom thermometry analysis.
     """
-    project_root = get_project_root()
+    project_root: Path = get_project_root()
     data_dir = project_root / "data" / dataset.value
     print(f"Constructed data directory path: {data_dir}")
 

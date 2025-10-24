@@ -2,7 +2,7 @@ import ast  # Used to safely evaluate the string representation of the list
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -37,8 +37,8 @@ class SeriesData(BaseModel):
     nifti_file: Path | None = None
     duration: float | None = None
     segmentation: str = ""
-    fo_temperature_start: float | None = None
-    fo_temperature_end: float | None = None
+    fo_temperature_start: float = -999.0
+    fo_temperature_end: float = -999.0
 
 
 @dataclass
@@ -112,7 +112,9 @@ def load_series_info(filename: Path) -> list[SeriesData]:
         # Iterate over each row in the DataFrame
         for index, row in df.iterrows():
             # Safely parse the string '[1.2, 3.4]' into a list of floats
-            te_ms_list = ast.literal_eval(row["te_ms"]) if isinstance(row["te_ms"], str) else []
+            te_ms_list = (
+                ast.literal_eval(row["te_ms"]) if isinstance(row["te_ms"], str) else []
+            )
 
             # Create a dataclass instance and append it to our list
             record = SeriesData(
@@ -139,7 +141,9 @@ def load_series_info(filename: Path) -> list[SeriesData]:
         sys.exit(1)
 
 
-def export_unique_te_arrays(data: list[SeriesData], output_dir: Path, te_units: str = "ms") -> None:
+def export_unique_te_arrays(
+    data: list[SeriesData], output_dir: Path, te_units: str = "ms"
+) -> None:
     """
     Finds unique te_ms arrays and exports each to a separate text file.
     """
@@ -152,9 +156,13 @@ def export_unique_te_arrays(data: list[SeriesData], output_dir: Path, te_units: 
     # Use a set of tuples to find unique lists (lists aren't hashable, tuples are)
     unique_arrays = set(tuple(item.te_ms) for item in data)
     # divide by divisor
-    unique_arrays = set(tuple(value / divisor for value in te_tuple) for te_tuple in unique_arrays)
+    unique_arrays = set(
+        tuple(value / divisor for value in te_tuple) for te_tuple in unique_arrays
+    )
 
-    print(f"\nFound {len(unique_arrays)} unique te_ms arrays. Exporting to '{output_dir}/'...")
+    print(
+        f"\nFound {len(unique_arrays)} unique te_ms arrays. Exporting to '{output_dir}/'..."
+    )
 
     # Loop through the unique arrays and save each to a file
     for i, te_tuple in enumerate(unique_arrays, 1):
