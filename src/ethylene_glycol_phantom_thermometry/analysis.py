@@ -1,3 +1,5 @@
+"""Batch analysis of ethylene glycol multiecho thermometry data"""
+
 import logging
 import math
 import pdb
@@ -10,6 +12,10 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from mrimagetools.filters.multiecho_thermometry_filter import (
+    R_SQUARED_THRESHOLD,
+    thermometry_signal_model,
+)
 from mrimagetools.pipelines.thermometry.multiecho_thermometry import (
     multiecho_thermometry,
 )
@@ -40,6 +46,31 @@ class Method(str, Enum):
 def analysis(
     data_dir: Path, method: Method = Method.REGIONWISE, n_bootstrap: int = 10
 ) -> None:
+    """Performs batch analysis of multi-echo MR thermometry data.
+
+    This function orchestrates the entire analysis pipeline for a given dataset
+    directory. It reads series information from an Excel file and BIDS sidecars,
+    groups data by experimental runs, and processes each run using the
+    `multiecho_thermometry` pipeline.
+
+    For each run, it generates a histogram of temperature distributions. After
+    processing all runs, it aggregates the results into an Excel spreadsheet
+    and creates a summary plot showing temperature over time for each region,
+    including fiber optic reference temperatures.
+
+    The function expects the data directory to contain:
+    - 'image_information.xlsx': An Excel file with series metadata.
+    - NIfTI image files (.nii.gz) and their corresponding BIDS JSON sidecars.
+    - Segmentation files in NIfTI format.
+
+    Args:
+        data_dir: The path to the directory containing the dataset.
+        method: The analysis method to use, chosen from the `Method` enum.
+            Defaults to `Method.REGIONWISE`.
+        n_bootstrap: The number of bootstrap iterations to perform if the
+            'regionwise_bootstrap' method is selected. Defaults to 10.
+
+    """
     console.print(f"[bold blue]Starting analysis in: {data_dir}[/bold blue]")
     image_info_file = data_dir / "image_information.xlsx"
     series_data_list = load_series_info(image_info_file)
@@ -106,7 +137,7 @@ def analysis(
             for dt in report_data.acquisition_date_time
         ]
         duration_list = [sd.duration for sd in run_series if sd.duration]
-        sort_indices = sorted(range(len(acq_dt_list)), key=lambda k: acq_dt_list[k])
+        sort_indices = np.argsort(np.asarray(acq_dt_list))
         acq_dt_list_sorted = [acq_dt_list[i] for i in sort_indices]
         duration_list_sorted = [duration_list[i] for i in sort_indices]
         run_start_time = acq_dt_list_sorted[0]
@@ -151,6 +182,32 @@ def analysis(
         plt.title(f"Thermometry Analysis Run {run}")
         plt.legend()
         plt.savefig(data_dir / f"run-{run:02d}_temperature_distribution.png")
+
+        # Plot all region signal samples and optimal fitted curve
+        for region in report_data.report:
+            plt.figure(figsize=(10, 6))
+            for i in range(len(region.signal_values)):
+                # pdb.set_trace()
+                plt.scatter(
+                    report_data.echo_times,
+                    region.signal_values[i, :],
+                    c="#1f77b4",
+                    marker=".",
+                    alpha=0.1,
+                )
+            t = np.arange(0, report_data.echo_times[-1], 1e-4)
+            mean_fit_params = np.average(
+                region.fitted_params[region.r_squared > R_SQUARED_THRESHOLD, :], axis=0
+            )
+            # pdb.set_trace()
+
+            plt.plot(t, thermometry_signal_model(t, *mean_fit_params.tolist()), c="r")
+            plt.title("Signal and Fit")
+            plt.xlabel("Echo Time (s)")
+            plt.ylabel("Signal Magnitude (a.u.)")
+            plt.savefig(
+                data_dir / f"run-{run:02d}_region-{region.region_id}_signal_fit.png"
+            )
 
     console.print(
         f"[bold blue]Thermometry processing using method {method} complete[/bold blue]"
