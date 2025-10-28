@@ -9,7 +9,7 @@ import typer
 from ethylene_glycol_phantom_thermometry.analysis import Method, analysis
 from ethylene_glycol_phantom_thermometry.util import get_project_root
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 class Dataset(str, Enum):
