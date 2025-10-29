@@ -9,8 +9,8 @@
     "2025-09-17T13:16:22.667500",
     "2025-09-17T13:19:15.642500"
   ],
-  "processing_date": "2025-10-27 20:09:53",
-  "processing_time_seconds": 20.602768999990076,
+  "processing_date": "2025-10-29 15:09:37",
+  "processing_time_seconds": 25.453522600000724,
   "magnetic_field_tesla": 1.495853808527938,
   "analysis_method": "regionwise_bootstrap",
   "n_bootstrap": 1000,
