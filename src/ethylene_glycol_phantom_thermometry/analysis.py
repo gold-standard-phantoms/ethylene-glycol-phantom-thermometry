@@ -6,6 +6,7 @@ import pdb
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
+from turtle import color
 
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
@@ -19,6 +20,7 @@ from mrimagetools.filters.multiecho_thermometry_filter import (
 from mrimagetools.pipelines.thermometry.multiecho_thermometry import (
     multiecho_thermometry,
 )
+from pyparsing import alphanums, col
 from rich.console import Console
 
 from ethylene_glycol_phantom_thermometry.util import (
@@ -41,6 +43,12 @@ class Method(str, Enum):
     REGIONWISE = "regionwise"
     VOXELWISE = "voxelwise"
     REGIONWISE_BOOTSTRAP = "regionwise_bootstrap"
+
+
+REGION_COLOURS = {
+    1: "#cc4530",
+    2: "#30cc54",
+}
 
 
 def analysis(
@@ -158,6 +166,29 @@ def analysis(
         fibre_optic_samples.append(run_series[sort_indices[-1]].fo_temperature_end)
 
         plt.figure(figsize=(10, 6))
+        hist_min = np.min(
+            [
+                np.min(
+                    region.region_temperature_values[
+                        region.r_squared > R_SQUARED_THRESHOLD
+                    ]
+                )
+                for region in report_data.report
+            ]
+        )
+        hist_max = np.max(
+            [
+                np.max(
+                    region.region_temperature_values[
+                        region.r_squared > R_SQUARED_THRESHOLD
+                    ]
+                )
+                for region in report_data.report
+            ]
+        )
+        bin_width = 0.5  # 0.1 °C bin width
+        hist_bins = np.arange(hist_min, hist_max + bin_width, bin_width).tolist()
+
         for region in report_data.report:
             analysis_results.append(
                 {
@@ -167,14 +198,21 @@ def analysis(
                     "temperature": region.region_mean_temperature,
                     "uncertainty": region.region_temperature_uncertainty[0],
                     "interval": region.region_temperature_uncertainty[1],
+                    "num_samples": np.sum(region.r_squared > R_SQUARED_THRESHOLD),
+                    "fractional_uncertainty": region.region_temperature_uncertainty[0]
+                    / region.region_mean_temperature,
                 }
             )
             # plot histograms of the temperature values
             plt.hist(
-                region.region_temperature_values[region.r_squared > 0.9],
-                bins=20,
+                region.region_temperature_values[
+                    region.r_squared > R_SQUARED_THRESHOLD
+                ],
                 alpha=0.5,
                 label=f"NMR Tube {region.region_id}",
+                color=REGION_COLOURS[region.region_id],
+                # bins=hist_bins,
+                bins=20,
             )
 
         plt.xlabel("Temperature (°C)")
@@ -182,6 +220,7 @@ def analysis(
         plt.title(f"Thermometry Analysis Run {run}")
         plt.legend()
         plt.savefig(data_dir / f"run-{run:02d}_temperature_distribution.png")
+        plt.close()
 
         # Plot all region signal samples and optimal fitted curve
         for region in report_data.report:
@@ -191,9 +230,9 @@ def analysis(
                 plt.scatter(
                     report_data.echo_times,
                     region.signal_values[i, :],
-                    c="#1f77b4",
+                    c=REGION_COLOURS[region.region_id],
                     marker=".",
-                    alpha=0.1,
+                    alpha=0.075,
                 )
             t = np.arange(0, report_data.echo_times[-1], 1e-4)
             mean_fit_params = np.average(
@@ -201,13 +240,18 @@ def analysis(
             )
             # pdb.set_trace()
 
-            plt.plot(t, thermometry_signal_model(t, *mean_fit_params.tolist()), c="r")
+            plt.plot(
+                t,
+                thermometry_signal_model(t, *mean_fit_params.tolist()),
+                c=REGION_COLOURS[region.region_id],
+            )
             plt.title("Signal and Fit")
             plt.xlabel("Echo Time (s)")
             plt.ylabel("Signal Magnitude (a.u.)")
             plt.savefig(
                 data_dir / f"run-{run:02d}_region-{region.region_id}_signal_fit.png"
             )
+        plt.close()
 
     console.print(
         f"[bold blue]Thermometry processing using method {method} complete[/bold blue]"
@@ -274,13 +318,19 @@ def analysis(
             marker="o",
             linestyle="-",
             capsize=5,
+            color=REGION_COLOURS[region_id],
+            alpha=0.75,
         )
-    plt.plot(
-        np.asarray(fibre_optic_sample_times),
-        np.asarray(fibre_optic_samples),
+    plt.errorbar(
+        x=np.asarray(fibre_optic_sample_times),
+        y=np.asarray(fibre_optic_samples),
+        yerr=1.0,  # symmetrical ±1.0 °C errorbar for the fibre optic probe
         marker="o",
         linestyle="-",
         label="Fibre Optic Temperature",
+        capsize=5,
+        color="#1f77b4",
+        alpha=0.75,
     )
 
     formatter = mticker.FuncFormatter(timedelta_formatter)
@@ -311,6 +361,7 @@ def analysis(
     plot_file_svg = data_dir / f"thermometry_analysis_{method}.svg"
     plt.savefig(plot_file_png)
     plt.savefig(plot_file_svg)
+    plt.close()
 
 
 def main(data_dir: Path, method: Method) -> None:
