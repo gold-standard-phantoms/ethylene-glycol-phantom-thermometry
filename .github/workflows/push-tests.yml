@@ -1,0 +1,20 @@
+name: Run Tests on Push
+
+on:
+  push:
+    branches:
+      - "**"
+      - "!main"
+
+jobs:
+  test_job:
+    name: Run Push Tests
+    uses: gold-standard-phantoms/github-actions/.github/workflows/python-test.yml@v0.3.0 # Replace 'main' with a tag or commit SHA for production
+    with:
+      python_version: "3.11" # Replace with the version of Python you want to use for testing and linting
+      # ruff_version: "0.9.10" # Optional: Override the version from uv.lock
+      # mypy_version: "1.15.0" # Optional: Override the version from uv.lock
+      # uv_lock_path: "./backend/uv.lock" # Optional: Custom path for monorepos
+      # working_directory: "./backend" # Optional: Working directory for monorepos
+      use_dvc: false # Whether to use DVC to pull data. Expects AWS credentials to be set in the repository secrets.
+    secrets: inherit
